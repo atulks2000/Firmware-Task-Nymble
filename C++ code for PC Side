@@ -1,0 +1,90 @@
+#include <iostream>
+#include <fstream>
+#include <chrono>
+#include <thread>
+#include <Windows.h>
+
+#define BAUD_RATE 2400
+
+int main() {
+    // Open serial port for communication
+    HANDLE hSerial;
+    hSerial = CreateFile("\\\\.\\COM3", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+    if (hSerial == INVALID_HANDLE_VALUE) {
+        std::cerr << "Error in opening serial port!" << std::endl;
+        return 1;
+    }
+
+    DCB dcbSerialParams = {0};
+    dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
+
+    if (!GetCommState(hSerial, &dcbSerialParams)) {
+        std::cerr << "Error getting serial port state!" << std::endl;
+        CloseHandle(hSerial);
+        return 1;
+    }
+
+    dcbSerialParams.BaudRate = BAUD_RATE;
+    dcbSerialParams.ByteSize = 8;
+    dcbSerialParams.StopBits = ONESTOPBIT;
+    dcbSerialParams.Parity = NOPARITY;
+
+    if (!SetCommState(hSerial, &dcbSerialParams)) {
+        std::cerr << "Error setting serial port state!" << std::endl;
+        CloseHandle(hSerial);
+        return 1;
+    }
+
+    std::ifstream file("data.txt"); // Replace 'data.txt' with your file name
+    if (!file.is_open()) {
+        std::cerr << "Error opening file!" << std::endl;
+        CloseHandle(hSerial);
+        return 1;
+    }
+
+    std::string line;
+    std::string data;
+    while (getline(file, line)) {
+        data += line;
+        data += "\n";
+    }
+    file.close();
+
+    // Calculate CRC checksum for the data
+    // Assuming CRC8 implementation
+    // Implement your CRC calculation function if not using CRC8
+    // uint8_t crc = calculateCRC8(data);
+
+    auto start = std::chrono::steady_clock::now();
+
+    // Transmit the data
+    DWORD bytesWritten;
+    if (!WriteFile(hSerial, data.c_str(), data.length(), &bytesWritten, NULL)) {
+        std::cerr << "Error writing data to serial port!" << std::endl;
+        CloseHandle(hSerial);
+        return 1;
+    }
+
+    auto end = std::chrono::steady_clock::now();
+    auto diff = end - start;
+    double duration = std::chrono::duration<double>(diff).count();
+    double speed = (data.length() * 8) / duration; // Bits per second
+
+    std::cout << "Data transmission speed: " << speed << " bits/second" << std::endl;
+
+    // Read the received data from MCU
+    char receivedData[1000]; // Assuming 1000 bytes of data received from MCU
+    DWORD bytesRead;
+    if (!ReadFile(hSerial, receivedData, sizeof(receivedData), &bytesRead, NULL)) {
+        std::cerr << "Error reading data from serial port!" << std::endl;
+        CloseHandle(hSerial);
+        return 1;
+    }
+
+    // Display the received data
+    std::cout << "Received data:\n" << receivedData << std::endl;
+
+    CloseHandle(hSerial);
+    return 0;
+}
