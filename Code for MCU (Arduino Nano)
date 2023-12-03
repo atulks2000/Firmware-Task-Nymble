@@ -1,0 +1,57 @@
+#include <EEPROM.h>
+
+#define BAUD_RATE 2400
+
+// Function to calculate CRC8 checksum
+uint8_t calculateCRC8(uint8_t *data, size_t len) {
+    uint8_t crc = 0x00;
+    for (size_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (uint8_t j = 0; j < 8; j++) {
+            if (crc & 0x80) {
+                crc = (crc << 1) ^ 0x07;
+            } else {
+                crc <<= 1;
+            }
+        }
+    }
+    return crc;
+}
+
+void setup() {
+    Serial.begin(BAUD_RATE);
+    while (!Serial) {
+        // Wait for serial port to connect
+    }
+    Serial.setTimeout(1000);
+    size_t dataSize = 1000; // Total data size to be received
+    uint8_t receivedData[dataSize]; // Array to store received data
+    size_t receivedBytes = 0; // Counter for received bytes
+    bool receiving = true; // Flag to indicate data reception
+
+    while (receiving) {
+        if (Serial.available() > 0) {
+            receivedData[receivedBytes] = Serial.read();
+            receivedBytes++;
+
+            // Store data into EEPROM as and when it's received
+            EEPROM.write(receivedBytes - 1, receivedData[receivedBytes - 1]);
+
+            // Check if entire data is received
+            if (receivedBytes == dataSize) {
+                receiving = false;
+                Serial.println("Data received successfully!");
+            }
+        }
+    }
+
+    // Retrieve stored data from EEPROM and send it back
+    for (size_t i = 0; i < dataSize; i++) {
+        uint8_t data = EEPROM.read(i);
+        Serial.write(data);
+    }
+}
+
+void loop() {
+    // Nothing in the loop for this example
+}
